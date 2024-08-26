@@ -62,7 +62,7 @@ Clone the repository and catkin_make:
 
 ```
     cd ~/$A_ROS_DIR$/src
-    git clone [https://github.com/HViktorTsoi/FAST_LIO_LOCALIZATION.git](https://github.com/slamer2024/FAST_LIO_LOCALIZATION.git)
+    git clone https://github.com/slamer2024/FAST_LIO_LOCALIZATION.git
     cd FAST_LIO_LOCALIZATION
     git submodule update --init
     cd ../..

@@ -1,104 +1,81 @@
-#!/usr/bin/env python3
-# coding=utf8
-from __future__ import print_function, division, absolute_import
-
 import copy
-import _thread
+import threading
 import time
 
 import numpy as np
-import rospy
-import tf
-import tf.transformations
+import rclpy
+from rclpy.node import Node
 from geometry_msgs.msg import Pose, Point, Quaternion
 from nav_msgs.msg import Odometry
-
-cur_odom_to_baselink = None
-cur_map_to_odom = None
-
-
-def pose_to_mat(pose_msg):
-    return np.matmul(
-        tf.listener.xyz_to_mat44(pose_msg.pose.pose.position),
-        tf.listener.xyzw_to_mat44(pose_msg.pose.pose.orientation),
-    )
+import tf_transformations
+import tf2_ros
 
 
-def transform_fusion():
-    global cur_odom_to_baselink, cur_map_to_odom
+class TransformFusion(Node):
+    def __init__(self):
+        super().__init__("transform_fusion")
 
-    br = tf.TransformBroadcaster()
-    while True:
-        time.sleep(1 / FREQ_PUB_LOCALIZATION)
+        self.cur_odom_to_baselink = None
+        self.cur_map_to_odom = None
 
-        # TODO 这里注意线程安全
-        cur_odom = copy.copy(cur_odom_to_baselink)
-        if cur_map_to_odom is not None:
-            T_map_to_odom = pose_to_mat(cur_map_to_odom)
-        else:
-            T_map_to_odom = np.eye(4)
+        self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
+        self.pub_localization = self.create_publisher(Odometry, "/localization", 10)
 
-        br.sendTransform(
-            tf.transformations.translation_from_matrix(T_map_to_odom),
-            tf.transformations.quaternion_from_matrix(T_map_to_odom),
-            rospy.Time.now(),
-            "camera_init",
-            "map",
-        )
+        self.create_subscription(Odometry, "/Odometry", self.cb_save_cur_odom, 10)
+        self.create_subscription(Odometry, "/map_to_odom", self.cb_save_map_to_odom, 10)
 
-        if cur_odom is not None:
-            # 发布全局定位的odometry
-            localization = Odometry()
-            T_odom_to_base_link = pose_to_mat(cur_odom)
-            # 这里T_map_to_odom短时间内变化缓慢 暂时不考虑与T_odom_to_base_link时间同步
+        self.freq_pub_localization = 50
+        threading.Thread(target=self.transform_fusion, daemon=True).start()
+
+    def pose_to_mat(self, pose_msg):
+        trans = np.eye(4)
+        trans[:3, 3] = [pose_msg.position.x, pose_msg.position.y, pose_msg.position.z]
+        quat = [pose_msg.orientation.x, pose_msg.orientation.y, pose_msg.orientation.z, pose_msg.orientation.w]
+        trans[:3, :3] = tf_transformations.quaternion_matrix(quat)[:3, :3]
+        return trans
+
+    def transform_fusion(self):
+        rate = self.create_rate(self.freq_pub_localization)
+        while rclpy.ok():
+            if self.cur_odom_to_baselink is None:
+                continue
+
+            cur_odom = copy.copy(self.cur_odom_to_baselink)
+            if self.cur_map_to_odom is not None:
+                T_map_to_odom = self.pose_to_mat(self.cur_map_to_odom.pose.pose)
+            else:
+                T_map_to_odom = np.eye(4)
+
+            T_odom_to_base_link = self.pose_to_mat(cur_odom.pose.pose)
             T_map_to_base_link = np.matmul(T_map_to_odom, T_odom_to_base_link)
-            xyz = tf.transformations.translation_from_matrix(T_map_to_base_link)
-            quat = tf.transformations.quaternion_from_matrix(T_map_to_base_link)
+
+            xyz = tf_transformations.translation_from_matrix(T_map_to_base_link)
+            quat = tf_transformations.quaternion_from_matrix(T_map_to_base_link)
+
+            localization = Odometry()
             localization.pose.pose = Pose(Point(*xyz), Quaternion(*quat))
             localization.twist = cur_odom.twist
 
-            localization.header.stamp = cur_odom.header.stamp
+            localization.header.stamp = self.get_clock().now().to_msg()
             localization.header.frame_id = "map"
             localization.child_frame_id = "body"
-            # rospy.loginfo_throttle(1, '{}'.format(np.matmul(T_map_to_odom, T_odom_to_base_link)))
-            pub_localization.publish(localization)
+            self.pub_localization.publish(localization)
+
+            time.sleep(rate)
+
+    def cb_save_cur_odom(self, msg):
+        self.cur_odom_to_baselink = msg
+
+    def cb_save_map_to_odom(self, msg):
+        self.cur_map_to_odom = msg
 
 
-def cb_save_cur_odom(odom_msg):
-    global cur_odom_to_baselink
-    cur_odom_to_baselink = odom_msg
-
-
-def cb_save_map_to_odom(odom_msg):
-    global cur_map_to_odom
-    cur_map_to_odom = odom_msg
+def main(args=None):
+    rclpy.init(args=args)
+    node = TransformFusion()
+    rclpy.spin(node)
+    rclpy.shutdown()
 
 
 if __name__ == "__main__":
-    # tf and localization publishing frequency (HZ)
-    FREQ_PUB_LOCALIZATION = 50
-
-    rospy.init_node("transform_fusion")
-    rospy.loginfo("Transform Fusion Node Inited...")
-
-    rospy.Subscriber("/Odometry", Odometry, cb_save_cur_odom, queue_size=1)
-    rospy.Subscriber("/map_to_odom", Odometry, cb_save_map_to_odom, queue_size=1)
-
-    pub_localization = rospy.Publisher("/localization", Odometry, queue_size=1)
-
-    # 发布定位消息
-    listener = tf.TransformListener()
-    # while True:
-    #     try:
-    #         livox_to_base_link = listener.lookupTransform("livox", "base_link", rospy.Time(0))
-    #         # rospy.loginfo("Here")
-    #     except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
-    #         continue
-
-    #     if livox_to_base_link:
-    #         # rospy.loginfo_once(livox_to_base_link)
-    #         break
-
-    _thread.start_new_thread(transform_fusion, ())
-
-    rospy.spin()
+    main()

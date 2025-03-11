@@ -2,6 +2,8 @@
 <!-- Launch file for Livox MID360 LiDAR -->
 
 	<arg name="rviz" default="true" />
+	<arg name="map" default="" />
+	<arg name="pcd_map_topic" default="/map" />
 
 	<rosparam command="load" file="$(find fast_lio_localization)/config/mid360.yaml" />
 
@@ -15,17 +17,17 @@
 	<param name="pcd_save_enable" type="bool" value="0" />
     <node pkg="fast_lio_localization" type="fastlio_mapping" name="laserMapping" output="screen" />
 
+	<param name="pcd_map_topic" type="string" value="$(arg pcd_map_topic)"/>
 
-	<arg name="map" default="" />
 	<!-- loalization-->
-    <node pkg="fast_lio_localization" type="global_localization.py" name="global_localization" output="screen" />
+    <node pkg="fast_lio_localization" type="global_localization.py" name="global_localization" output="screen"/>
 
 	<!-- transform  fusion-->
     <node pkg="fast_lio_localization" type="transform_fusion.py" name="transform_fusion" output="screen" />
 
 	<!-- glbal map-->
     <node pkg="pcl_ros" type="pcd_to_pointcloud" name="map_publishe" output="screen"
-		  args="$(arg map) 5 _frame_id:=map cloud_pcd:=/map" />
+		  args="$(arg map) 5 _frame_id:=map cloud_pcd:=$(arg pcd_map_topic)" />
 
 
 	<group if="$(arg rviz)">

@@ -38,10 +38,14 @@ def transform_fusion():
         else:
             T_map_to_odom = np.eye(4)
 
-        br.sendTransform(tf.transformations.translation_from_matrix(T_map_to_odom),
-                         tf.transformations.quaternion_from_matrix(T_map_to_odom),
-                         rospy.Time.now(),
-                         'camera_init', 'map')
+        br.sendTransform(
+            tf.transformations.translation_from_matrix(T_map_to_odom),
+            tf.transformations.quaternion_from_matrix(T_map_to_odom),
+            rospy.Time.now(),
+            "camera_init",
+            "map",
+        )
+
         if cur_odom is not None:
             # 发布全局定位的odometry
             localization = Odometry()
@@ -54,8 +58,8 @@ def transform_fusion():
             localization.twist = cur_odom.twist
 
             localization.header.stamp = cur_odom.header.stamp
-            localization.header.frame_id = 'map'
-            localization.child_frame_id = 'body'
+            localization.header.frame_id = "map"
+            localization.child_frame_id = "body"
             # rospy.loginfo_throttle(1, '{}'.format(np.matmul(T_map_to_odom, T_odom_to_base_link)))
             pub_localization.publish(localization)
 
@@ -70,19 +74,31 @@ def cb_save_map_to_odom(odom_msg):
     cur_map_to_odom = odom_msg
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # tf and localization publishing frequency (HZ)
     FREQ_PUB_LOCALIZATION = 50
 
-    rospy.init_node('transform_fusion')
-    rospy.loginfo('Transform Fusion Node Inited...')
+    rospy.init_node("transform_fusion")
+    rospy.loginfo("Transform Fusion Node Inited...")
 
-    rospy.Subscriber('/Odometry', Odometry, cb_save_cur_odom, queue_size=1)
-    rospy.Subscriber('/map_to_odom', Odometry, cb_save_map_to_odom, queue_size=1)
+    rospy.Subscriber("/Odometry", Odometry, cb_save_cur_odom, queue_size=1)
+    rospy.Subscriber("/map_to_odom", Odometry, cb_save_map_to_odom, queue_size=1)
 
-    pub_localization = rospy.Publisher('/localization', Odometry, queue_size=1)
+    pub_localization = rospy.Publisher("/localization", Odometry, queue_size=1)
 
     # 发布定位消息
+    listener = tf.TransformListener()
+    # while True:
+    #     try:
+    #         livox_to_base_link = listener.lookupTransform("livox", "base_link", rospy.Time(0))
+    #         # rospy.loginfo("Here")
+    #     except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+    #         continue
+
+    #     if livox_to_base_link:
+    #         # rospy.loginfo_once(livox_to_base_link)
+    #         break
+
     _thread.start_new_thread(transform_fusion, ())
 
     rospy.spin()

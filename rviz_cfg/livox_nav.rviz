@@ -283,7 +283,7 @@ Visualization Manager:
           Size (Pixels): 1
           Size (m): 0.004999999888241291
           Style: Flat Squares
-          Topic: /map
+          Topic: /pcd_map
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
@@ -410,9 +410,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.5647963285446167
+      Pitch: 1.2997965812683105
       Target Frame: body
-      Yaw: 4.796769142150879
+      Yaw: 4.711771488189697
     Saved: ~
 Window Geometry:
   Displays:

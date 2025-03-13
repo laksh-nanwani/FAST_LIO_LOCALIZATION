@@ -74,7 +74,6 @@ set(dependencies
   pcl_ros
   pcl_conversions
   livox_ros_driver2
-  genmsg
 )
 
 # Thirdparty libraries
@@ -92,8 +91,6 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   ${msg_files}
 )
 ament_export_dependencies(rosidl_default_runtime)
-
-add_dependencies(fastlio_mapping fast_lio_gencfg fast_lio_generate_messages_cpp)
 
 add_executable(fastlio_mapping src/laserMapping.cpp include/ikd-Tree/ikd_Tree.cpp src/preprocess.cpp)
 target_include_directories(fastlio_mapping PUBLIC
